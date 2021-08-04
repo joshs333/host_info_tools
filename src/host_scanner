@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+import socket
+import sys
+
+from host_info_tools import message_interface as hit_mi
+
+# Create a TCP/IP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# Connect the socket to the port where the server is listening
+server_address = ('localhost', 6072)
+print('connecting to %s port %s' % server_address)
+sock.connect(server_address)
+
+cc = hit_mi.ClientConnection(sock, server_address)

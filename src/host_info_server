@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+import json
+import socket
+import sys
+import os
+
+from host_info_tools import message_interface as hit_mi
+
+if __name__ == "__main__":
+    HIS_PORT = 6072
+    HIS_HOST = "0.0.0.0"
+    if "HIS_PORT" in os.environ:
+        HIS_PORT = os.environ["HIS_PORT"]
+    if "HIS_HOST" in os.environ:
+        HIS_HOST = os.environ["HIS_HOST"]
+
+    print("Host Info Server starting on port %d"%(HIS_PORT))
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((HIS_HOST, HIS_PORT))
+
+    server_socket.listen(1)
+    while True:
+        connection, client_address = server_socket.accept()
+        print("Server connected to %s"%str(client_address))
+        hit_mi.server_connection_handler(connection, client_address, None)
+
+    ## Get connection... 
+    ## Perform handshake (determine interface)
