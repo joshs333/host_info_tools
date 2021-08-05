@@ -1,15 +1,40 @@
 #!/usr/bin/env python3
+from multiprocessing import Pool
 import socket
 import sys
 
 from host_info_tools import message_interface as hit_mi
+from host_info_tools import host_scanning as hit_hs
+from host_info_tools import host_database as hit_db
 
-# Create a TCP/IP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+iface = "eno1"
+ip_range = "255.255.255.85"
 
-# Connect the socket to the port where the server is listening
-server_address = ('localhost', 6072)
-print('connecting to %s port %s' % server_address)
-sock.connect(server_address)
+li = hit_db.LocalHostInfo("bob")
+db = hit_db.HostDatabase(li)
+sr = hit_hs.ScanRange(iface, ip_range)
 
-cc = hit_mi.ClientConnection(sock, server_address)
+def connect(addr):
+    try:
+        return (addr, hit_mi.ClientConnection(addr, 6753))
+    except:
+        pass
+    return (addr, None)       
+
+with Pool(processes = 100) as pool:
+    results = pool.map(connect, sr.getIPs())
+
+connections = {}
+host_list = {}
+for r in results:
+    if r[1] is not None:
+        connections[r[0]] = r[1]
+        host_list = r[1].getHostList()
+        db.processHostListing(host_list, iface)
+
+mhl = db.getHostListings(iface)
+for r in connections:
+    connections[r].sendHostList(mhl)
+print(mhl)
+print(db.getHostListings(iface))
+print(db.getHostListings(iface))
