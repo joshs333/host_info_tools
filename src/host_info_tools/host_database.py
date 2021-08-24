@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import ifcfg
+import threading
 import hashlib
 
 class LocalHostInfo():
@@ -66,31 +67,41 @@ class HostDatabase():
         # If cache_data is not none, read in host history
         self.host_info_list = {}
         self.local_host_info = local_host_info
+        self.mutex = threading.Lock()
 
-    def getHostListings(self, interface):
+    def getHostListings(self, interface = None):
         """
         Generate serialized list of hosts / update_times / hash
         """
-        listings = []
-        for host in self.host_info_list:
-            if self.host_info_list[host].iface != interface:
-                continue
-            listings.append(self.host_info_list[host].getInfo())
-        if self.local_host_info is not None:
-            listings.append(self.local_host_info.getInfo(interface))
-        return listings
+        self.mutex.acquire()
+        try:
+            listings = []
+            for host in self.host_info_list:
+                if interface is not None and self.host_info_list[host].iface != interface:
+                    continue
+                listings.append(self.host_info_list[host].getInfo())
+            if self.local_host_info is not None:
+                listings.append(self.local_host_info.getInfo(interface))
+
+            self.mutex.release()
+            return listings
+        except Exception as err:
+            self.mutex.release()
+            raise err
 
     def processHostListing(self, host_list, interface):
-        for host_info in host_list:
-            host_name = host_info["hostname"]
-            if self.local_host_info is not None:
-                if host_name == self.local_host_info.hostname:
-                    continue
-            if host_name in self.host_info_list:
-                self.host_info_list[host_name].updateTo(host_info)
-            else:
-                self.host_info_list[host_name] = HostInfo.fromInfo(host_info, interface)
-
-if __name__ == "__main__":
-    hd = HostDatabase()
-    print(hd.serializeHosts())
+        self.mutex.acquire()
+        try:
+            for host_info in host_list:
+                host_name = host_info["hostname"]
+                if self.local_host_info is not None:
+                    if host_name == self.local_host_info.hostname:
+                        continue
+                if host_name in self.host_info_list:
+                    self.host_info_list[host_name].updateTo(host_info, interface)
+                else:
+                    self.host_info_list[host_name] = HostInfo.fromInfo(host_info, interface)
+            self.mutex.release()
+        except Exception as err:
+            self.mutex.release()
+            raise err

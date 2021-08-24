@@ -2,39 +2,56 @@
 from multiprocessing import Pool
 import socket
 import sys
+import time
 
 from host_info_tools import message_interface as hit_mi
 from host_info_tools import host_scanning as hit_hs
-from host_info_tools import host_database as hit_db
+from host_info_tools import host_database as hit_hd
+from host_info_tools import argparse as hit_ap
 
-iface = "eno1"
-ip_range = "255.255.255.85"
+if __name__ == "__main__":
+    default_ip_range = "255.255.255.0-255"
+    default_thread_count = 30
+    default_server_port = 6753
 
-li = hit_db.LocalHostInfo("bob")
-db = hit_db.HostDatabase(li)
-sr = hit_hs.ScanRange(iface, ip_range)
+    ap = hit_ap.Arguments(["t", "thread_count"])
+    ap.parse_arguments(sys.argv[1:])
 
-def connect(addr):
-    try:
-        return (addr, hit_mi.ClientConnection(addr, 6753))
-    except:
-        pass
-    return (addr, None)       
+    if ap.get_flag_boolean(["h", "help"]):
+        print("host_scanner [flags] [ [scan_specification] ... ] ")
+        print(" utility to interact with hosts running the host_info_server")
+        print("[Flags]")
+        print(" -h                      : print this help message")
+        print(" -t | --thread_count     : number of threads to use to scan (default: %d)"%default_thread_count)
+        print(" -p | --port             : port to use (default: %d)"%default_server_port)
+        print("")
+        print("[scan_specification]")
+        print("   <interface>[:<ip_range>]")
+        print("     eg: eth0:10.3.1.10-60")
+        print("     eg: eth0")
+        print("   if the ip range is not specified it will default to %s"%default_ip_range)
+        print("   the 255 means that for that section of the address it will use the same")
+        print("   as the address of the calling computer on that interface.")
 
-with Pool(processes = 100) as pool:
-    results = pool.map(connect, sr.getIPs())
+    tc = ap.get_flag_value(["t", "thread_count"])
+    if tc is not None:
+        default_thread_count = int(tc)
 
-connections = {}
-host_list = {}
-for r in results:
-    if r[1] is not None:
-        connections[r[0]] = r[1]
-        host_list = r[1].getHostList()
-        db.processHostListing(host_list, iface)
+    scan_blacklist = ["lo", "localhost", "br-*", "docker*"]
+    scan_whitelist = []
+    for i in range(ap.get_arg_count()):
+        arg = ap.get_arg_at(i)
+        if ":" in arg:
+            splt = arg.split(":")
+            print("Scanning %s with range %s"%(splt[0], splt[1]))
+            scan_whitelist.append({"interface": splt[0], "scan_range": splt[1]})
+        else:
+            print("Scanning %s with range %s"%(splt[0], default_ip_range))
+            scan_whitelist.append({"interface": arg})
+    
+    database = hit_hd.HostDatabase()
+    scanner = hit_hs.ScanScheduler(scan_whitelist, scan_blacklist, default_ip_range, default_thread_count, default_server_port, database, skip_self = False)
+    scanner.scanAll()
 
-mhl = db.getHostListings(iface)
-for r in connections:
-    connections[r].sendHostList(mhl)
-print(mhl)
-print(db.getHostListings(iface))
-print(db.getHostListings(iface))
+    resulting_list = database.getHostListings()
+    print(resulting_list)

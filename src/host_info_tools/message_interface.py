@@ -154,15 +154,11 @@ class Server():
         def handshake_handler(msg_type, payload):
             handshake = True
         def list_rqst_handler(msg_type, payload):
-            print("sending list")
             new_msg = host_database.getHostListings(iface)
-            print(new_msg)
             sock.send(create_host_list(new_msg))
         def host_list_handler(msg_type, payload):
-            print("got list")
-            print(payload)
-            host_database.processHostListing(payload, iface)
             print(host_database.getHostListings(iface))
+            host_database.processHostListing(payload, iface)
 
 
         message_queue = MessageBuffer(sock, timeout = 1.0)
@@ -178,15 +174,19 @@ class Server():
 
     def __init__(self, host_address, host_port, host_database):
         print("HIS starting on  %s:%d"%(host_address, host_port))
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((host_address, host_port))
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind((host_address, host_port))
+        self.host_database = host_database
 
+
+    def listen(self, a1 = "filler", a2 = "filler"):
         print("HIS listening...")
-        server_socket.listen(1)
+        self.server_socket.listen(5)
+
         while True:
-            connection, client_address = server_socket.accept()
-            _thread.start_new_thread(Server.server_connection_handler,(connection, client_address, host_database))
+            connection, client_address = self.server_socket.accept()
+            _thread.start_new_thread(Server.server_connection_handler,(connection, client_address, self.host_database))
 
 
 

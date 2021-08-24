@@ -1,10 +1,17 @@
-server_port: 80
+server_port: 6753
 server_host: "0.0.0.0"
+server_hostname: "jspisak-labmachine"
 
-scan_hosts: true
-scan_targets:
-  "eth0":
-    scan_range: [10.0.1.150, 10.0.1.160]
-  "eth1":
-    scan_range: [10.0.1.150, 10.0.1.160]
+# When to perform scan
+scan_on_start: true
+scan_on_start_timeout: 30.
+scan_on_interval: 10.
+
+scan_pool_size: 255
+scan_range: "0-255.0-255.0-255.0-255"
+
+scan_blacklist: [ "lo", "localhost" ]
+scan_whitelist:
+-   interface: "eno1"
+    scan_range: "10.0.1.0-100"
 

@@ -1,13 +1,70 @@
 #!/usr/bin/env python3
-import json
 import socket
+import yaml
+import time
+import json
 import sys
 import os
 
+import _thread
+
 from host_info_tools import message_interface as hit_mi
+from host_info_tools import host_scanning as hit_hs
 from host_info_tools import host_database as hit_hd
+from host_info_tools import argparse as hit_a
+
+
+def load_config(file):
+    try:
+        with open(file, 'r') as stream:
+            return yaml.safe_load(stream)
+    except Exception as err:
+        print("Unable to load config: %s", str(err))
 
 if __name__ == "__main__":
-    local_info = hit_hd.LocalHostInfo("jspisak-labmachine")
-    database = hit_hd.HostDatabase(local_info)
-    hit_mi.Server("0.0.0.0", 6753, database)
+    config_file = "/etc/host_info_tools/host_info_server.yaml"
+
+    ap = hit_a.Arguments(["c", "config"])
+    ap.parse_arguments(sys.argv[1:])
+
+    config_src = ap.get_flag_value(["c", "config"])
+    if config_src is not None:
+        config_file = config_src
+
+    cfg = load_config(config_file)
+    def check_cfg(name, default):
+        if cfg is None or name not in cfg:
+            return default
+        return cfg[name]
+
+    server_hostname = check_cfg("server_hostname", socket.gethostname())
+    server_port = check_cfg("server_port", 6753)
+    server_host = check_cfg("server_host", "0.0.0.0")
+    scan_on_start = check_cfg("scan_on_start", False)
+    scan_on_start_timeout = check_cfg("scan_on_start_timeout", 0.)
+    scan_on_interval = check_cfg("scan_on_interval", 10.)
+    scan_pool_size = check_cfg("scan_pool_size", 255)
+    scan_range = check_cfg("scan_range", "255.255.255.0-255")
+    scan_blacklist = check_cfg("scan_blacklist", ["lo", "localhost", "br-*", "docker*"])
+    scan_whitelist = check_cfg("scan_whitelist", [])
+
+    database = None
+    if len(server_hostname) > 0:
+        local_info = hit_hd.LocalHostInfo(server_hostname)
+        database = hit_hd.HostDatabase(local_info)
+    else:
+        database = hit_hd.HostDatabase()
+    server = hit_mi.Server(server_host, server_port, database)
+    _thread.start_new_thread(server.listen, (None, None))
+
+    if scan_on_interval > 0.0 or scan_on_start:
+        scanner = hit_hs.ScanScheduler(scan_whitelist, scan_blacklist, scan_range, scan_pool_size, server_port, database)
+        if scan_on_start:
+            if scan_on_start_timeout > 0.0:
+                time.sleep(scan_on_start_timeout)
+            scanner.scanAll()
+        if scan_on_interval > 0.0:
+            _thread.start_new_thread(scanner.scanOnInterval, (scan_on_interval, None))
+
+    while True:
+        time.sleep(1.)
