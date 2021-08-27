@@ -1,4 +1,12 @@
-# Host Tools
-A small toolset for dynamically finding and listing hosts on a network. Designed for use with some number or robots interacting with a basestation.
+# Host Info Tools
+A small toolset for automatic host detection with multicast.
 
-Each individual robots runs a host_server that can respond to queries about host info.
+## Install
+Pip will install all the base files and modules, then hit_installer installs and sets up the service file.
+```
+sudo -H pip3 install .
+sudo hit_installer
+```
+
+# Configuration
+Once installed modify /etc/host_info_tools/host_info_server.yaml to modify behavior.

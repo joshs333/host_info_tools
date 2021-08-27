@@ -6,19 +6,28 @@ import os
 
 if __name__ == "__main__":
     print("Running host info tools installer!")
+    source_dir = "/usr/local"
+
+    if ".local" in __file__:
+        source_dir = os.path.join(os.environ["HOME"], ".local")
+
     config_file_dest = "/etc/host_info_tools/host_info_server.yaml"
     service_file_dest = "/etc/systemd/system/host_info_server.service"
 
     tmp_install_dir = os.path.dirname(os.path.realpath(__file__))
-    config_file = os.path.join(tmp_install_dir, "config/host_info_server.yaml")
-    service_file = os.path.join(tmp_install_dir, "config/host_info_server.service")
+    config_file = os.path.join(source_dir, "host_info_tools/host_info_server.yaml")
+    service_file = os.path.join(source_dir, "host_info_tools/host_info_server.service")
 
     try:
         os.mkdir("/etc/host_info_tools")
     except:
         pass
-    shutil.copy("/usr/local/host_info_tools/host_info_server.yaml", "/etc/host_info_tools/host_info_server.yaml")
-    os.symlink("/usr/local/host_info_tools/host_info_server.service", "/etc/systemd/system/host_info_server.service")
+    try:
+        os.remove(service_file_dest)
+    except:
+        pass
+    shutil.copy(config_file, config_file_dest)
+    os.symlink(service_file, service_file_dest)
 
     subprocess.check_output(shlex.split("systemctl enable host_info_server"))
     subprocess.check_output(shlex.split("systemctl start host_info_server"))
