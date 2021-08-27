@@ -10,98 +10,96 @@ class LocalHostInfo():
     def __init__(self, hostname):
         self.hostname = hostname
 
-    def getInfo(self, iface):
+    def serialize(self, iface):
         if iface not in ifcfg.interfaces():
-            raise Exception("Iface [%s] does not exist in ifcfg"%self.iface)
+            raise Exception("Iface [%s] does not exist in ifcfg"%iface)
         info = ifcfg.interfaces()[iface]
 
         return {
             "hostname": self.hostname,
-            "ip": info["inet"],
-            "update_time": time.time()
+            "ip_addr": info["inet"],
+            "last_update": time.time()
         }
-
-class HostInfo():
-    @staticmethod
-    def deSerialize(data):
-        info = json.loads(data.decode('utf-8'))
-        return HostInfo(info["hostname"], info["iface"], info["ip"], info["update_time"])
-
-    def serialize(self):
-        return bytes(json.dumps({
-            "hostname": self.hostname,
-            "iface": self.iface,
-            "ip": self.ip,
-            "update_time": self.update_time 
-            }), 'utf-8')
-
-    @staticmethod
-    def fromInfo(info, interface):
-        return HostInfo(info["hostname"], interface, info["ip"], info["update_time"])
-
-    def __init__(self, hostname, iface, ip, update_time):
-        self.hostname = hostname
-        self.iface = iface
-        self.ip = ip
-        self.update_time = update_time
-
-    def getInfo(self):
-        return {
-            "hostname": self.hostname,
-            "ip": self.ip,
-            "update_time": self.update_time
-        }
-    
-    def updateTo(self, new_info, iface):
-        if new_info["hostname"] != self.hostname:
-            return
-        if new_info["update_time"] > self.update_time or self.update_time > time.time():
-            self.update_time = new_info["update_time"]
-            self.ip = new_info["ip"]
-            if self.iface != iface:
-                print("Warning: swapping %s from iface %s to %s"%(), file=sys.stderr)
-            self.iface = iface
 
 class HostDatabase():
+    class HostInfo():
+        def serialize(self):
+            return {
+                "hostname": self.hostname,
+                "ip_addr": self.ip_addr,
+                "last_update": self.last_update
+            }
+        hostname = None
+        interface = None
+        ip_addr = None
+        last_update = None
+
     def __init__(self, local_host_info = None):
-        # If cache_data is not none, read in host history
-        self.host_info_list = {}
         self.local_host_info = local_host_info
+        self.host_lists = {}
         self.mutex = threading.Lock()
+
+    def updateHost(self, hostname, ip_addr, interface, update_time, force = False):
+        """
+        This function assumes the mutex is held and doesn't try to claim it!
+        """
+        self.mutex.acquire()
+        try:
+            if hostname not in self.host_lists:
+                entry = HostDatabase.HostInfo()
+                entry.hostname = hostname
+                entry.interface = interface
+                entry.ip_addr = ip_addr
+                entry.last_update = time.time()
+                self.host_lists[hostname] = entry
+            else:
+                entry = self.host_lists[hostname]
+                if force or entry.last_update < update_time:
+                    entry.last_update = update_time
+                    if entry.ip_addr != ip_addr:
+                        print("WARN: Host [%s] ip changed from [%s] to [%s]"%(hostname, entry.ip_addr, ip_addr), file=sys.stderr)
+                        entry.ip_addr = ip_addr
+                    if entry.interface != interface:
+                        print("WARN: Host [%s] interface changed from [%s] to [%s]"%(hostname, entry.interface, interface), file=sys.stderr)
+                        entry.interface = interface
+        except Exception as err:
+            print("ERROR: unable to update host - %s"%(str(err)), file=sys.stderr)
+        self.mutex.release()
+
+    def processHostID(self, host_id, ip_addr, interface):
+        """
+        Handles when a HOST_ID message is received
+        """
+        self.updateHost(host_id, ip_addr, interface, time.time(), force=True)
 
     def getHostListings(self, interface = None):
         """
         Generate serialized list of hosts / update_times / hash
         """
+        listings = []
         self.mutex.acquire()
         try:
-            listings = []
-            for host in self.host_info_list:
-                if interface is not None and self.host_info_list[host].iface != interface:
+            for host in self.host_lists:
+                if interface is not None and self.host_lists[host].iface != interface:
                     continue
-                listings.append(self.host_info_list[host].getInfo())
-            if self.local_host_info is not None:
-                listings.append(self.local_host_info.getInfo(interface))
+                listings.append(self.host_lists[host].serialize())
+            if interface is not None:
+                listings.append(self.local_host_info.serialize(interface))
+            else:
+                listings.append(self.local_host_info.serialize("lo"))
 
-            self.mutex.release()
-            return listings
         except Exception as err:
             self.mutex.release()
             raise err
+
+        self.mutex.release()
+        return listings
 
     def processHostListing(self, host_list, interface):
-        self.mutex.acquire()
-        try:
-            for host_info in host_list:
-                host_name = host_info["hostname"]
-                if self.local_host_info is not None:
-                    if host_name == self.local_host_info.hostname:
-                        continue
-                if host_name in self.host_info_list:
-                    self.host_info_list[host_name].updateTo(host_info, interface)
-                else:
-                    self.host_info_list[host_name] = HostInfo.fromInfo(host_info, interface)
-            self.mutex.release()
-        except Exception as err:
-            self.mutex.release()
-            raise err
+        for host_info in host_list.keys():
+            host_name = host_info["hostname"]
+            if self.local_host_info is not None:
+                if host_name == self.local_host_info.hostname:
+                    continue
+        
+            self.updateHost(host_name, host_info["ip_addr"], host_info["interface"], host_info["update_time"])

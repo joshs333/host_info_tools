@@ -1,0 +1,13 @@
+[Unit]
+Description=Host Info Server
+Requires=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/host_info_server
+TimeoutStopSec=30
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import fnmatch
 import socket
+import ifcfg
 import yaml
 import time
 import json
@@ -9,8 +11,9 @@ import os
 import _thread
 
 from host_info_tools import message_interface as hit_mi
-from host_info_tools import host_scanning as hit_hs
-from host_info_tools import host_database as hit_hd
+from host_info_tools import hosts_file as hit_hf
+from host_info_tools import host_discovery as hit_hd
+from host_info_tools import host_database as hit_hdb
 from host_info_tools import argparse as hit_a
 
 
@@ -19,7 +22,7 @@ def load_config(file):
         with open(file, 'r') as stream:
             return yaml.safe_load(stream)
     except Exception as err:
-        print("Unable to load config: %s", str(err))
+        raise Exception("Unable to load config [%s]: %s"%(file,str(err)))
 
 if __name__ == "__main__":
     config_file = "/etc/host_info_tools/host_info_server.yaml"
@@ -32,39 +35,75 @@ if __name__ == "__main__":
         config_file = config_src
 
     cfg = load_config(config_file)
-    def check_cfg(name, default):
+    def check_cfg(name, default, cfg = cfg):
         if cfg is None or name not in cfg:
             return default
         return cfg[name]
 
+    mcast_group = check_cfg("mcast_group", "224.1.1.1")
+    mcast_port = check_cfg("mcast_port", 5000)
     server_hostname = check_cfg("server_hostname", socket.gethostname())
     server_port = check_cfg("server_port", 6753)
     server_host = check_cfg("server_host", "0.0.0.0")
-    scan_on_start = check_cfg("scan_on_start", False)
-    scan_on_start_timeout = check_cfg("scan_on_start_timeout", 0.)
-    scan_on_interval = check_cfg("scan_on_interval", 10.)
-    scan_pool_size = check_cfg("scan_pool_size", 255)
-    scan_range = check_cfg("scan_range", "255.255.255.0-255")
-    scan_blacklist = check_cfg("scan_blacklist", ["lo", "localhost", "br-*", "docker*"])
-    scan_whitelist = check_cfg("scan_whitelist", [])
+    database_cache = check_cfg("database_cache", "test_cache.yaml")
+    startup_delay = check_cfg("startup_delay", 5.)
 
-    database = None
+    local_info = None
     if len(server_hostname) > 0:
-        local_info = hit_hd.LocalHostInfo(server_hostname)
-        database = hit_hd.HostDatabase(local_info)
-    else:
-        database = hit_hd.HostDatabase()
-    server = hit_mi.Server(server_host, server_port, database)
-    _thread.start_new_thread(server.listen, (None, None))
+        local_info = hit_hdb.LocalHostInfo(server_hostname)
+    database = hit_hdb.HostDatabase(local_info)
 
-    if scan_on_interval > 0.0 or scan_on_start:
-        scanner = hit_hs.ScanScheduler(scan_whitelist, scan_blacklist, scan_range, scan_pool_size, server_port, database)
-        if scan_on_start:
-            if scan_on_start_timeout > 0.0:
-                time.sleep(scan_on_start_timeout)
-            scanner.scanAll()
-        if scan_on_interval > 0.0:
-            _thread.start_new_thread(scanner.scanOnInterval, (scan_on_interval, None))
+    # Generate host files
+    host_files = []
+    if "host_files" in cfg:
+        for host_file in cfg["host_files"]:
+            if "file_path" not in host_file:
+                print("ERROR: invalid host_files config, each entry must contain file_path", file=sys.stderr)
+                continue
+            file_path = host_file["file_path"]
+            update_period = check_cfg("update_period", 1., host_file)
+            
+            f = hit_hf.HostFile(file_path, database)
+            f.spawn_update_thread(update_period)
+            host_files.append(f)
 
+    if startup_delay > 0.:
+        time.sleep(startup_delay)
+
+    # Generate discovery
+    discoverers = []
+    gbroadcast_on_start = check_cfg("broadcast_on_start", True)
+    gbroadcast_on_interval = check_cfg("broadcast_on_interval", 1.)
+    interfaces_blacklist = check_cfg("interfaces_blacklist", [ "docker*", "br-*", "lo" ])
+    if cfg is not None:
+        if "interfaces_whitelist" in cfg:
+            for interface in cfg["interfaces_whitelist"]:
+                icfg = cfg["interfaces_whitelist"][interface]
+                broadcast_on_start = check_cfg("broadcast_on_start", True, icfg)
+                broadcast_on_interval = check_cfg("broadcast_on_interval", 1., icfg)
+
+                discoverer = hit_hd.HostDiscovery(server_hostname, interface, mcast_group, mcast_port, database)
+                discoverer.spawn_scanning_thread()
+                if broadcast_on_start:
+                    discoverer.broadcast()
+                if broadcast_on_interval > 0.:
+                    discoverer.spawn_broadcast_thread(broadcast_on_interval)
+        else:
+            for interface in ifcfg.interfaces():
+                blacklisted = False
+                for biface in interfaces_blacklist:
+                    if fnmatch.fnmatch(interface, biface):
+                        blacklisted = True
+                
+                if not blacklisted:
+                    print("Adding interface %s"%(interface), file=sys.stderr)
+                    discoverer = hit_hd.HostDiscovery(server_hostname, interface, mcast_group, mcast_port, database)
+                    discoverer.spawn_scanning_thread()
+                    if gbroadcast_on_start:
+                        discoverer.broadcast()
+                    if gbroadcast_on_interval > 0.:
+                        discoverer.spawn_broadcast_thread(gbroadcast_on_interval)
+
+    # All threads are spawned, we just let them do their thing :)
     while True:
-        time.sleep(1.)
+        time.sleep(10.)

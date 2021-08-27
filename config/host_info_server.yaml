@@ -1,17 +1,31 @@
+# Multicast is used to efficiently
+# identify hosts on the network
+mcast_group: "224.1.1.1"
+mcast_port: 5000
+
+# A TCP server runs to field information requests
 server_port: 6753
 server_host: "0.0.0.0"
-server_hostname: "jspisak-labmachine"
+# (server_hostname defaults to $HOSTNAME)
+# server_hostname: "jspisak-labmachine"
 
-# When to perform scan
-scan_on_start: true
-scan_on_start_timeout: 30.
-scan_on_interval: 10.
+database_cache: test_cache.yaml
 
-scan_pool_size: 255
-scan_range: "0-255.0-255.0-255.0-255"
+# Delay startup to make sure interfaces are up before broadcasting
+startup_delay: 1.
 
-scan_blacklist: [ "lo", "localhost" ]
-scan_whitelist:
--   interface: "eno1"
-    scan_range: "10.0.1.0-100"
+# Each interface that uses multicast
+# must be explicitly configured
+broadcast_on_start: true
+broadcast_on_interval: 1.
+interfaces_blacklist: [ docker*, br-*, lo ]
+# interfaces_whitelist:
+#     eno1:
+#         # Whether or not to send a broadcast on startup
+#         broadcast_on_start: true
+#         # Whether or not to broadcast on a set interval
+#         broadcast_on_interval: 1.
 
+host_files:
+-   file_path: /etc/hosts
+    update_period: 1.
