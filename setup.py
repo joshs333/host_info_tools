@@ -25,7 +25,7 @@ setup(
             "config/host_info_server.yaml"
             ])
     ],
-    scripts=['src/host_info_server', 'src/hit_installer'],
+    scripts=['src/host_info_server', 'src/hit'],
     install_requires=['pyyaml', 'ifcfg'],
     zip_safe=False
 )
