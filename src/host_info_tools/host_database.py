@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+"""
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: stores information on various hosts that have been interacted with
+"""
 import sys
 import time
 import json

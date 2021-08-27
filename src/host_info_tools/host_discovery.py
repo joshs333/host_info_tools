@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+"""
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: support for discovering hosts on an interface with multicast
+"""
 import sys
 import time
 import ifcfg

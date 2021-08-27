@@ -1,3 +1,9 @@
+"""
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: a quick, lightweight network protocol
+"""
+
 import math
 import json
 import time

@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: a utility to install / enable / disable the host_info_server
+"""
+import subprocess
+import shutil
+import shlex
+import os
+import sys
+
+config_file_dest = "/etc/host_info_tools/host_info_server.yaml"
+service_file_dest = "/etc/systemd/system/host_info_server.service"
+
+def install():
+    source_dir = "/usr/local"
+
+    if ".local" in __file__:
+        source_dir = os.path.join(os.environ["HOME"], ".local")
+
+
+    tmp_install_dir = os.path.dirname(os.path.realpath(__file__))
+    config_file = os.path.join(source_dir, "host_info_tools/host_info_server.yaml")
+    service_file = os.path.join(source_dir, "host_info_tools/host_info_server.service")
+
+    try:
+        os.mkdir("/etc/host_info_tools")
+    except:
+        pass
+    try:
+        os.remove(service_file_dest)
+    except:
+        pass
+    shutil.copy(config_file, config_file_dest)
+    os.symlink(service_file, service_file_dest)
+
+def enable():
+    if not os.path.exists(service_file_dest):
+        print("Service file does not exist, installing.")
+        install()
+
+    subprocess.check_output(shlex.split("systemctl enable host_info_server"))
+    subprocess.check_output(shlex.split("systemctl start host_info_server"))
+
+def disable():
+    subprocess.check_output(shlex.split("systemctl stop host_info_server"))
+    subprocess.check_output(shlex.split("systemctl disable host_info_server"))
+
+if __name__ == "__main__":
+
+    if len(sys.argv) <= 1 or sys.argv[1] == "-h" or sys.argv[1] == "--help":
+        print("Host Info Tools.")
+        print("     used to interact with host_info_server instances")
+        print("Usage:")
+        print("  hit <keyword>")
+        print("Keywords:")
+        print("  install : used to install service and config files after a pip install")
+        print("  enable  : enables the host_info_server service")
+        print("  disable : disable the host_info_server service")
+    elif sys.argv[1] == "install":
+        install()
+    elif sys.argv[1] == "enable":
+        enable()
+    elif sys.argv[1] == "disable":
+        disable()

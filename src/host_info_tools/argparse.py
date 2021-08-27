@@ -1,3 +1,9 @@
+"""
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: a simple utility to parse command line arguments
+"""
+
 class Arguments():
     positional_args = []
     flags = []

@@ -1,6 +1,7 @@
 """
-This is able to take a host database and update / generate a hosts file
-with available hosts / ips
+Author: Josh Spisak <jspisak@andrew.cmu.edu>
+Date: 8/26/2021
+Description: Generates a hosts file from hosts database
 """
 import os
 import re
