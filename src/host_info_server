@@ -43,9 +43,9 @@ if __name__ == "__main__":
     mcast_group = check_cfg("mcast_group", "224.1.1.1")
     mcast_port = check_cfg("mcast_port", 5000)
     server_hostname = check_cfg("server_hostname", socket.gethostname())
-    server_port = check_cfg("server_port", 6753)
-    server_host = check_cfg("server_host", "0.0.0.0")
-    database_cache = check_cfg("database_cache", "test_cache.yaml")
+    # server_port = check_cfg("server_port", 6753)
+    # server_host = check_cfg("server_host", "0.0.0.0")
+    # database_cache = check_cfg("database_cache", "test_cache.yaml")
     startup_delay = check_cfg("startup_delay", 5.)
 
     local_info = None
@@ -72,37 +72,19 @@ if __name__ == "__main__":
 
     # Generate discovery
     discoverers = []
-    gbroadcast_on_start = check_cfg("broadcast_on_start", True)
-    gbroadcast_on_interval = check_cfg("broadcast_on_interval", 1.)
-    interfaces_blacklist = check_cfg("interfaces_blacklist", [ "docker*", "br-*", "lo" ])
-    if cfg is not None:
-        if "interfaces_whitelist" in cfg:
-            for interface in cfg["interfaces_whitelist"]:
-                icfg = cfg["interfaces_whitelist"][interface]
-                broadcast_on_start = check_cfg("broadcast_on_start", True, icfg)
-                broadcast_on_interval = check_cfg("broadcast_on_interval", 1., icfg)
+    request_on_start = check_cfg("request_on_start", False)
+    broadcast_on_start = check_cfg("broadcast_on_start", True)
+    broadcast_on_interval = check_cfg("broadcast_on_interval", 1.)
 
-                discoverer = hit_hd.HostDiscovery(server_hostname, interface, mcast_group, mcast_port, database)
-                discoverer.spawn_scanning_thread()
-                if broadcast_on_start:
-                    discoverer.broadcast()
-                if broadcast_on_interval > 0.:
-                    discoverer.spawn_broadcast_thread(broadcast_on_interval)
-        else:
-            for interface in ifcfg.interfaces():
-                blacklisted = False
-                for biface in interfaces_blacklist:
-                    if fnmatch.fnmatch(interface, biface):
-                        blacklisted = True
-                
-                if not blacklisted:
-                    print("Adding interface %s"%(interface), file=sys.stderr)
-                    discoverer = hit_hd.HostDiscovery(server_hostname, interface, mcast_group, mcast_port, database)
-                    discoverer.spawn_scanning_thread()
-                    if gbroadcast_on_start:
-                        discoverer.broadcast()
-                    if gbroadcast_on_interval > 0.:
-                        discoverer.spawn_broadcast_thread(gbroadcast_on_interval)
+    discoverer = hit_hd.HostDiscovery(server_hostname, mcast_group, mcast_port, database)
+    discoverer.spawn_scanning_thread()
+
+    if request_on_start:
+        discoverer.request_broadcast()
+    if broadcast_on_start:
+        discoverer.broadcast()
+    if broadcast_on_interval > 0.:
+        discoverer.spawn_broadcast_thread(broadcast_on_interval)
 
     # All threads are spawned, we just let them do their thing :)
     while True:

@@ -61,7 +61,7 @@ def create_host_list(host_list):
     return serialize_message(Message.HOST_LIST, host_list)
 
 def create_host_id_rqst():
-    return serialize_message(Message.HOST_ID_RQST)
+    return serialize_message(Message.HOST_ID_RQST, {})
 
 def create_host_id(host_name):
     return serialize_message(Message.HOST_ID, host_name)

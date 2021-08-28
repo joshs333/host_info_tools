@@ -14,14 +14,10 @@ class LocalHostInfo():
     def __init__(self, hostname):
         self.hostname = hostname
 
-    def serialize(self, iface):
-        if iface not in ifcfg.interfaces():
-            raise Exception("Iface [%s] does not exist in ifcfg"%iface)
-        info = ifcfg.interfaces()[iface]
-
+    def serialize(self):
         return {
             "hostname": self.hostname,
-            "ip_addr": info["inet"],
+            "ip_addr": "127.0.1.1",
             "last_update": time.time()
         }
 
@@ -34,7 +30,6 @@ class HostDatabase():
                 "last_update": self.last_update
             }
         hostname = None
-        interface = None
         ip_addr = None
         last_update = None
 
@@ -43,7 +38,7 @@ class HostDatabase():
         self.host_lists = {}
         self.mutex = threading.Lock()
 
-    def updateHost(self, hostname, ip_addr, interface, update_time, force = False):
+    def updateHost(self, hostname, ip_addr, update_time, force = False):
         """
         This function assumes the mutex is held and doesn't try to claim it!
         """
@@ -52,7 +47,6 @@ class HostDatabase():
             if hostname not in self.host_lists:
                 entry = HostDatabase.HostInfo()
                 entry.hostname = hostname
-                entry.interface = interface
                 entry.ip_addr = ip_addr
                 entry.last_update = time.time()
                 self.host_lists[hostname] = entry
@@ -63,20 +57,17 @@ class HostDatabase():
                     if entry.ip_addr != ip_addr:
                         print("WARN: Host [%s] ip changed from [%s] to [%s]"%(hostname, entry.ip_addr, ip_addr), file=sys.stderr)
                         entry.ip_addr = ip_addr
-                    if entry.interface != interface:
-                        print("WARN: Host [%s] interface changed from [%s] to [%s]"%(hostname, entry.interface, interface), file=sys.stderr)
-                        entry.interface = interface
         except Exception as err:
             print("ERROR: unable to update host - %s"%(str(err)), file=sys.stderr)
         self.mutex.release()
 
-    def processHostID(self, host_id, ip_addr, interface):
+    def processHostID(self, host_id, ip_addr):
         """
         Handles when a HOST_ID message is received
         """
-        self.updateHost(host_id, ip_addr, interface, time.time(), force=True)
+        self.updateHost(host_id, ip_addr, time.time(), force=True)
 
-    def getHostListings(self, interface = None):
+    def getHostListings(self):
         """
         Generate serialized list of hosts / update_times / hash
         """
@@ -84,13 +75,9 @@ class HostDatabase():
         self.mutex.acquire()
         try:
             for host in self.host_lists:
-                if interface is not None and self.host_lists[host].iface != interface:
-                    continue
                 listings.append(self.host_lists[host].serialize())
-            if interface is not None:
-                listings.append(self.local_host_info.serialize(interface))
-            else:
-                listings.append(self.local_host_info.serialize("lo"))
+            if self.local_host_info is not None:
+                listings.append(self.local_host_info.serialize())
 
         except Exception as err:
             self.mutex.release()
