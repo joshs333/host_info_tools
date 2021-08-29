@@ -46,11 +46,12 @@ class HostDiscovery():
 
         self.broadcast_sock.bind((self.mcast_group, self.mcast_port))
 
-    def broadcast_on_timer(self, interval = 1):
+    def broadcast_on_timer(self, interval = 1.):
         """
         Broadcasts along a certain interval
         Does not return unless there is an error with the socket
         """
+        print("INFO: beginning discovery broadcasting every %3.2f seconds."%(interval), file=sys.stderr)
         while True:
             self.broadcast()
             time.sleep(interval)
@@ -81,11 +82,12 @@ class HostDiscovery():
         message_queue.setMessageCallback(hit_mi.Message.HOST_ID_RQST, id_rqst_handler)
         message_queue.setMessageCallback(hit_mi.Message.HOST_ID, id_handler)
 
+        print("INFO: Discovery listening started.", file=sys.stderr)
         while True:
             try:
                 message_queue.process()
             except Exception as err:
-                print("WARN: listener on disconnected (%s)"%(str(err)), file=sys.stderr)
+                print("WARN: listening disconnected (%s)"%(str(err)), file=sys.stderr)
                 break
         
     def spawn_scanning_thread(self):
@@ -94,7 +96,7 @@ class HostDiscovery():
         """
         _thread.start_new_thread(HostDiscovery.scan,(self, None))
 
-    def spawn_broadcast_thread(self, broadcast_inverval = 5):
+    def spawn_broadcast_thread(self, broadcast_inverval = 5.):
         """
         Spawns a thread to broadcast on a certain interval
         """

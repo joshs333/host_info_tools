@@ -40,7 +40,7 @@ class Arguments():
             return default
         return self.positional_args[idx]
 
-    def get_flag_value(self, flag):
+    def get_flag_value(self, flag, default = None):
         """
         Gets the value of a set flag
         """
@@ -51,7 +51,7 @@ class Arguments():
         else:
             if flag in self.set_flags:
                 return self.set_flags[flag]
-        return None
+        return default
 
     def get_flag_boolean(self, flag):
         """

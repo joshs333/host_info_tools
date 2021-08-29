@@ -7,8 +7,12 @@ Description: a utility to install / enable / disable the host_info_server
 import subprocess
 import shutil
 import shlex
-import os
+import time
 import sys
+import os
+
+import host_info_tools.argparse as hit_ap
+import host_info_tools.message_interface as hit_mi
 
 config_file_dest = "/etc/host_info_tools/host_info_server.yaml"
 service_file_dest = "/etc/systemd/system/host_info_server.service"
@@ -58,9 +62,29 @@ if __name__ == "__main__":
         print("  install : used to install service and config files after a pip install")
         print("  enable  : enables the host_info_server service")
         print("  disable : disable the host_info_server service")
+        print("  list -i <server ip, default 127.0.0.1> -p <server port, default 6753> :")
+        print("      connect to a server and get a list of hosts it's discovered")
     elif sys.argv[1] == "install":
         install()
     elif sys.argv[1] == "enable":
         enable()
     elif sys.argv[1] == "disable":
         disable()
+    elif sys.argv[1] == "server":
+        ap = hit_ap.Arguments(["i", "p"])
+        ap.parse_arguments(sys.argv[1:])
+
+        server_name = ap.get_flag_value(["i"], "127.0.0.1")
+        server_port = int(ap.get_flag_value(["p"], 6753))
+
+        client = hit_mi.Client(server_name, server_port)
+        results = client.getHostList()
+
+        if len(results) <= 0:
+            print("Server has no connections.")
+        else:
+            print(" %-20s %-20s %s"%("Hostname", "IP Address", "Age"))
+            print("----------------------------------------------------")
+            now = time.time()
+            for r in results:
+                print(" %-20s %-20s %3.3f"%(r["hostname"], r["ip_addr"], now - r["last_update"]))

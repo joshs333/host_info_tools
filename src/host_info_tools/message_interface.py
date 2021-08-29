@@ -3,7 +3,7 @@ Author: Josh Spisak <jspisak@andrew.cmu.edu>
 Date: 8/26/2021
 Description: a quick, lightweight network protocol
 """
-
+import sys
 import math
 import json
 import time
@@ -141,3 +141,85 @@ class MessageBuffer():
         if callback is None:
             self.message_callbacks.pop(msg_type)
         self.message_callbacks[msg_type] = callback
+
+
+class Server():
+    @staticmethod
+    def get_iface_from_ip(ipaddr):
+        interfaces = ifcfg.interfaces()
+        local = None
+        for iface in interfaces:
+            if interfaces[iface]["inet"] == "127.0.0.1":
+                local = iface
+            if interfaces[iface]["inet"] == ipaddr:
+                return iface
+        if ipaddr == "127.0.1.1" and local is not None:
+            return local
+        raise Exception("Unable to identify interface.")
+
+    @staticmethod
+    def server_connection_handler(sock, client_address, host_database):
+        myaddr = sock.getsockname()[0]
+        iface = Server.get_iface_from_ip(myaddr)
+        print("INFO: Server connected to %s over %s"%(client_address[0], iface), file=sys.stderr)
+        sock.send(create_handshake(client_address))
+
+        handshake = False
+        def handshake_handler(msg_type, payload):
+            handshake = True
+        def list_rqst_handler(msg_type, payload):
+            new_msg = host_database.getHostListings()
+            sock.send(create_host_list(new_msg))
+
+
+        message_queue = MessageBuffer(sock, timeout = 10.0)
+        message_queue.setMessageCallback(Message.HANDSHAKE, handshake_handler)
+        message_queue.setMessageCallback(Message.LIST_RQST, list_rqst_handler)
+        while True:
+            try:
+                message_queue.process()
+            except Exception as err:
+                print("WARN: Disconnected from %s"%(client_address[0]), file=sys.stderr)
+                break
+
+    def __init__(self, host_address, host_port, host_database):
+        self.host_address = host_address
+        self.host_port = host_port
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind((host_address, host_port))
+        self.host_database = host_database
+
+
+    def listen(self, placeholder = "placeholder"):
+        print("INFO: HIS listening on  %s:%d"%(self.host_address, self.host_port), file=sys.stderr)
+        self.server_socket.listen(5)
+
+        while True:
+            connection, client_address = self.server_socket.accept()
+            _thread.start_new_thread(Server.server_connection_handler,(connection, client_address, self.host_database))
+
+    def spawn_listen_thread(self):
+        """
+        Spawns a thread to broadcast on a certain interval
+        """
+        _thread.start_new_thread(Server.listen,(self, None))
+
+class Client():
+    def __init__(self, address, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.sock.connect((address, port))
+        self.sock.send(create_handshake(address))
+
+        self.message_queue = MessageBuffer(self.sock)
+        msg = self.message_queue.waitForMessage(Message.HANDSHAKE, timeout = 1.0)
+        if msg is None:
+            raise Exception("Did not receive heartbeat :(")
+
+    def getHostList(self):
+        self.sock.send(create_listing_request())
+        resp = self.message_queue.waitForMessage(Message.HOST_LIST)
+        if resp is not None:
+            return resp
+        raise Exception("Disconnected or something :(")

@@ -43,9 +43,8 @@ if __name__ == "__main__":
     mcast_group = check_cfg("mcast_group", "224.1.1.1")
     mcast_port = check_cfg("mcast_port", 5000)
     server_hostname = check_cfg("server_hostname", socket.gethostname())
-    # server_port = check_cfg("server_port", 6753)
-    # server_host = check_cfg("server_host", "0.0.0.0")
-    # database_cache = check_cfg("database_cache", "test_cache.yaml")
+    server_port = check_cfg("server_port", 6753)
+    server_host = check_cfg("server_host", "0.0.0.0")
     startup_delay = check_cfg("startup_delay", 5.)
 
     local_info = None
@@ -66,6 +65,9 @@ if __name__ == "__main__":
             f = hit_hf.HostFile(file_path, database)
             f.spawn_update_thread(update_period)
             host_files.append(f)
+
+    info_server = hit_mi.Server(server_host, server_port, database)
+    info_server.spawn_listen_thread()
 
     if startup_delay > 0.:
         time.sleep(startup_delay)
